@@ -40,8 +40,17 @@ def test_qdrant_round_trip_named_vectors_search_and_delete(tmp_path: Path) -> No
 
     payloads = store.indexed_payloads()
     assert set(payloads) == {first.record.image_id, second.record.image_id}
-    candidates = store.search_images(first.fashion_vector, first.dino_vector, top_k=2)
+    candidates = store.search_images(
+        first.fashion_vector,
+        first.dino_vector,
+        top_k=1,
+        query_phash="0000000000000000",
+    )
     assert candidates[0].product_id == "p1"
+    assert {candidate.image_id for candidate in candidates} == {
+        first.record.image_id,
+        second.record.image_id,
+    }
 
     store.close()
     reopened = VectorStore(settings)

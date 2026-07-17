@@ -140,6 +140,31 @@ class VectorStore:
                 if image_id != exclude_image_id:
                     merged[image_id] = point
 
+        # pHash 只滚动轻量 payload，命中后才按 point id 读取双向量。
+        # 当前本地规模可接受线性比较；百万级应替换成专用二进制指纹索引。
+        if query_phash and self.client.collection_exists(self.settings.collection_name):
+            near_ids = []
+            for point in self._scroll_all(with_vectors=False):
+                payload = point.payload or {}
+                image_id = str(payload.get("image_id", point.id))
+                stored = payload.get("phash")
+                if (
+                    image_id not in merged
+                    and image_id != exclude_image_id
+                    and stored
+                    and phash_distance(query_phash, str(stored)) <= 8
+                ):
+                    near_ids.append(point.id)
+            if near_ids:
+                for point in self.client.retrieve(
+                    self.settings.collection_name,
+                    ids=near_ids,
+                    with_payload=True,
+                    with_vectors=True,
+                ):
+                    payload = point.payload or {}
+                    merged[str(payload.get("image_id", point.id))] = point
+
         candidates = []
         fashion_query = np.asarray(fashion_vector, dtype=np.float32)
         dino_query = np.asarray(dino_vector, dtype=np.float32)
