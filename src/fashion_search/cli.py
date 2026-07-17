@@ -53,6 +53,16 @@ def _settings() -> Settings:
     return Settings.default(project_root())
 
 
+def gradio_launch_options(settings: Settings) -> dict[str, object]:
+    """仅允许 Gradio 向浏览器返回商品展示图根目录中的文件。"""
+    return {
+        "server_name": settings.bind_host,
+        "server_port": settings.bind_port,
+        "share": False,
+        "allowed_paths": [str(settings.image_root)],
+    }
+
+
 def _service(settings: Settings, store: VectorStore | None = None) -> SearchService:
     calibrator_path = settings.state_dir / "same-product-calibrator.joblib"
     if not calibrator_path.is_file():
@@ -139,7 +149,7 @@ def command_serve(settings: Settings) -> None:
         raise RuntimeError("尚未建立索引，请先运行：uv run fashion-search index")
     try:
         app = build_app(_service(settings, store))
-        app.launch(server_name=settings.bind_host, server_port=settings.bind_port, share=False)
+        app.launch(**gradio_launch_options(settings))
     finally:
         store.close()
 

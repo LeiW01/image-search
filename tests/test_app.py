@@ -1,5 +1,7 @@
+from fashion_search import cli
 from fashion_search.app import build_app
 from fashion_search.cli import build_parser
+from fashion_search.config import Settings
 
 
 def test_cli_help_contains_all_commands() -> None:
@@ -24,3 +26,13 @@ def test_evaluate_command_accepts_query_limit() -> None:
 def test_gradio_app_builds_without_loading_models() -> None:
     app = build_app(None, status_message="请先运行建索引命令")
     assert app is not None
+
+
+def test_gradio_launch_allows_only_product_image_root(tmp_path) -> None:
+    options_factory = getattr(cli, "gradio_launch_options", None)
+    assert callable(options_factory), "缺少受控的 Gradio allowed_paths 配置"
+    settings = Settings.default(tmp_path)
+
+    options = options_factory(settings)
+
+    assert options["allowed_paths"] == [str(settings.image_root)]
