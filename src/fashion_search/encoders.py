@@ -27,6 +27,27 @@ def preferred_device() -> str:
     return "mps" if torch.backends.mps.is_available() else "cpu"
 
 
+def resolve_fashion_weights(settings: Settings) -> Path:
+    """优先使用用户放入项目的本地权重，否则下载固定 revision。"""
+    if settings.fashion_weights_path.is_file():
+        return settings.fashion_weights_path
+    return Path(
+        hf_hub_download(
+            repo_id=settings.fashion_model,
+            filename="open_clip_model.safetensors",
+            revision=settings.fashion_revision,
+            token=False,
+        )
+    )
+
+
+def resolve_dino_source(settings: Settings) -> Path | str:
+    required = ("model.safetensors", "config.json", "preprocessor_config.json")
+    if all((settings.dino_local_dir / filename).is_file() for filename in required):
+        return settings.dino_local_dir
+    return settings.dino_model
+
+
 class FashionSiglipEncoder:
     """使用 Marqo 固定版本的 FashionSigLIP 输出图片向量。"""
 
@@ -41,14 +62,10 @@ class FashionSiglipEncoder:
             return
         import open_clip
 
-        weights = hf_hub_download(
-            repo_id=self.settings.fashion_model,
-            filename="open_clip_model.safetensors",
-            revision=self.settings.fashion_revision,
-        )
+        weights = resolve_fashion_weights(self.settings)
         model, _, preprocess = open_clip.create_model_and_transforms(
             "ViT-B-16-SigLIP",
-            pretrained=weights,
+            pretrained=str(weights),
             device=self.device,
             force_image_size=224,
             image_mean=(0.5, 0.5, 0.5),
@@ -95,14 +112,22 @@ class DinoV2Encoder:
             return
         from transformers import AutoImageProcessor, AutoModel
 
+        source = resolve_dino_source(self.settings)
+        local = isinstance(source, Path)
+        common = {
+            "local_files_only": local,
+        }
+        if not local:
+            common["revision"] = self.settings.dino_revision
+            common["token"] = False
         self._processor = AutoImageProcessor.from_pretrained(
-            self.settings.dino_model,
-            revision=self.settings.dino_revision,
+            source,
+            **common,
         )
         self._model = AutoModel.from_pretrained(
-            self.settings.dino_model,
-            revision=self.settings.dino_revision,
+            source,
             use_safetensors=True,
+            **common,
         ).to(self.device)
         self._model.eval()
 

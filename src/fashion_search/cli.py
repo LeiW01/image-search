@@ -30,9 +30,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("inspect", help="检查商品展示图目录，不加载模型")
-    commands.add_parser("index", help="下载模型并增量建立双向量索引")
+    index = commands.add_parser("index", help="下载模型并增量建立双向量索引")
+    index.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="只索引前 N 张展示图用于小规模试跑；省略则全量索引",
+    )
     commands.add_parser("calibrate", help="用商品 ID 校准高置信同款概率")
-    commands.add_parser("evaluate", help="自动评测双模型与融合权重")
+    evaluate = commands.add_parser("evaluate", help="自动评测双模型与融合权重")
+    evaluate.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="每种配置最多评测 N 张已索引图片；省略则评测全部已索引图片",
+    )
     commands.add_parser("serve", help="启动仅限本机访问的 Gradio 页面")
     return parser
 
@@ -65,7 +77,7 @@ def command_inspect(settings: Settings) -> None:
     print(f"扫描错误数：{len(errors)}")
 
 
-def command_index(settings: Settings) -> None:
+def command_index(settings: Settings, *, limit: int | None = None) -> None:
     store = VectorStore(settings)
     try:
         stats = Indexer(
@@ -73,7 +85,7 @@ def command_index(settings: Settings) -> None:
             store,
             FashionSiglipEncoder(settings),
             DinoV2Encoder(settings),
-        ).run()
+        ).run(limit=limit)
         print(json.dumps(asdict(stats), ensure_ascii=False, indent=2))
     finally:
         store.close()
@@ -99,16 +111,19 @@ def command_calibrate(settings: Settings) -> None:
         store.close()
 
 
-def command_evaluate(settings: Settings) -> None:
+def command_evaluate(settings: Settings, *, limit: int | None = None) -> None:
     store = VectorStore(settings)
     try:
         records, errors = scan_display_images(settings.image_root, compute_digest=False)
+        indexed_ids = set(store.indexed_payloads())
+        records = [record for record in records if record.image_id in indexed_ids]
         if errors:
             print(f"扫描时记录到 {len(errors)} 个错误，将跳过这些文件。")
         report = evaluate_dataset(
             _service(settings, store),
             records,
             settings.state_dir / "evaluation.json",
+            query_limit=limit,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
     finally:
@@ -132,14 +147,17 @@ def command_serve(settings: Settings) -> None:
 def main() -> None:
     args = build_parser().parse_args()
     settings = _settings()
-    commands = {
-        "inspect": command_inspect,
-        "index": command_index,
-        "calibrate": command_calibrate,
-        "evaluate": command_evaluate,
-        "serve": command_serve,
-    }
     try:
-        commands[args.command](settings)
+        if args.command == "index":
+            command_index(settings, limit=args.limit)
+        elif args.command == "evaluate":
+            command_evaluate(settings, limit=args.limit)
+        else:
+            commands = {
+                "inspect": command_inspect,
+                "calibrate": command_calibrate,
+                "serve": command_serve,
+            }
+            commands[args.command](settings)
     except (RuntimeError, ValueError) as exc:
         raise SystemExit(f"错误：{exc}") from exc

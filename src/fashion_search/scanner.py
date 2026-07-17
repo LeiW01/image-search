@@ -21,12 +21,14 @@ def _digest(path: Path) -> str:
 
 
 def scan_display_images(
-    root: Path, *, compute_digest: bool = True
+    root: Path, *, compute_digest: bool = True, limit: int | None = None
 ) -> tuple[list[ImageRecord], list[str]]:
     """扫描 ``{shop}/{product}/display``，忽略 detail 与其他目录。"""
     root = root.expanduser().resolve()
     if not root.is_dir():
         return [], [f"图片根目录不存在或不是目录：{root}"]
+    if limit is not None and limit <= 0:
+        raise ValueError("扫描数量限制必须大于 0")
 
     records: list[ImageRecord] = []
     errors: list[str] = []
@@ -52,6 +54,8 @@ def scan_display_images(
                     source_digest=_digest(path) if compute_digest else "",
                 )
             )
+            if limit is not None and len(records) >= limit:
+                break
         except (OSError, ValueError) as exc:
             errors.append(f"{path}: {exc}")
     return records, errors

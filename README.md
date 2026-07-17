@@ -54,6 +54,22 @@ uv run fashion-search evaluate
 uv run fashion-search serve
 ```
 
+如果只想先验证完整链路，可以先索引少量图片：
+
+```bash
+uv run fashion-search index --limit 100
+```
+
+试跑不会删除 Qdrant 中其他已存在的数据。确认效果后，再运行不带 `--limit` 的全量命令。
+
+小规模索引后也可以只评测少量查询图：
+
+```bash
+uv run fashion-search evaluate --limit 10
+```
+
+评测只会使用已经写入 Qdrant 的图片，不会因为原图目录更大而自动执行全量推理。
+
 浏览器打开：<http://127.0.0.1:7860>
 
 停止服务时在终端按 `Ctrl-C`。
@@ -75,7 +91,16 @@ facebook/dinov2-base
 f9e44c814b77203eaa57a6bdbbd535f21ede1415
 ```
 
-模型会进入 Hugging Face 的本机共享缓存；`.gitignore` 同时排除了虚拟环境与 `state/` 运行数据。
+如果文件已手动放入以下目录，程序会优先离线加载，不再重复下载：
+
+```text
+state/models/marqo-fashionSigLIP/open_clip_model.safetensors
+state/models/dinov2-base/model.safetensors
+state/models/dinov2-base/config.json
+state/models/dinov2-base/preprocessor_config.json
+```
+
+否则模型会进入 Hugging Face 的本机共享缓存；`.gitignore` 同时排除了虚拟环境与整个 `state/` 运行目录。
 
 ## 常用开发命令
 

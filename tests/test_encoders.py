@@ -10,6 +10,8 @@ from fashion_search.encoders import (
     FashionSiglipEncoder,
     l2_normalize,
     preferred_device,
+    resolve_dino_source,
+    resolve_fashion_weights,
 )
 
 
@@ -30,11 +32,23 @@ def test_preferred_device_is_supported() -> None:
     assert preferred_device() in {"mps", "cpu"}
 
 
+def test_local_model_files_are_preferred(tmp_path: Path) -> None:
+    settings = Settings.default(tmp_path)
+    settings.fashion_weights_path.parent.mkdir(parents=True)
+    settings.fashion_weights_path.write_bytes(b"weights")
+    settings.dino_local_dir.mkdir(parents=True)
+    for filename in ("model.safetensors", "config.json", "preprocessor_config.json"):
+        (settings.dino_local_dir / filename).write_bytes(b"x")
+
+    assert resolve_fashion_weights(settings) == settings.fashion_weights_path
+    assert resolve_dino_source(settings) == settings.dino_local_dir
+
+
 @pytest.mark.model
 def test_real_models_return_normalized_768_vectors(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.jpg"
     Image.new("RGB", (224, 224), (80, 120, 180)).save(image_path)
-    settings = Settings.default(tmp_path)
+    settings = Settings.default(Path(__file__).resolve().parents[1])
 
     fashion = FashionSiglipEncoder(settings).encode([image_path])
     dino = DinoV2Encoder(settings).encode([image_path])

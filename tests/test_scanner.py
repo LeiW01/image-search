@@ -43,3 +43,15 @@ def test_missing_root_is_reported_without_raising(tmp_path: Path) -> None:
 
     assert records == []
     assert len(errors) == 1
+
+
+def test_scan_can_stop_after_trial_limit(tmp_path: Path) -> None:
+    display = tmp_path / "shop" / "product" / "display"
+    display.mkdir(parents=True)
+    for index in range(3):
+        (display / f"{index}.jpg").write_bytes(str(index).encode())
+
+    records, errors = scan_display_images(tmp_path, limit=2)
+
+    assert errors == []
+    assert len(records) == 2

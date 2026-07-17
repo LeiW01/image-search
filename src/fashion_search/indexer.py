@@ -76,8 +76,8 @@ class Indexer:
                 only_records[middle:], errors
             )
 
-    def run(self) -> IndexStats:
-        records, scan_errors = scan_display_images(self.settings.image_root)
+    def run(self, *, limit: int | None = None) -> IndexStats:
+        records, scan_errors = scan_display_images(self.settings.image_root, limit=limit)
         errors = list(scan_errors)
         existing = self.store.indexed_payloads()
         pending = [record for record in records if not self._unchanged(record, existing.get(record.image_id))]
@@ -85,7 +85,12 @@ class Indexer:
         indexed = 0
         for start in range(0, len(pending), self.settings.batch_size):
             indexed += self._process_batch(pending[start : start + self.settings.batch_size], errors)
-        deleted = self.store.delete_missing({record.image_id for record in records})
+        # 试跑只看部分图片，不能把不在试跑集合中的已有 point 当成已删除原图。
+        deleted = (
+            self.store.delete_missing({record.image_id for record in records})
+            if limit is None
+            else 0
+        )
         stats = IndexStats(
             scanned=len(records),
             indexed=indexed,

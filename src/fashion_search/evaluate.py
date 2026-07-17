@@ -27,10 +27,21 @@ def compute_recall_at_k(expected: list[str], ranked: list[list[str]], k: int) ->
     return hits / len(expected)
 
 
-def evaluate_dataset(service, records, output_path: Path, configurations=None):
+def evaluate_dataset(
+    service,
+    records,
+    output_path: Path,
+    configurations=None,
+    *,
+    query_limit: int | None = None,
+):
     configurations = configurations or DEFAULT_CONFIGURATIONS
     counts = Counter(record.product_key for record in records)
     queries = [record for record in records if counts[record.product_key] >= 2]
+    if query_limit is not None:
+        if query_limit <= 0:
+            raise ValueError("评测查询数量限制必须大于 0")
+        queries = queries[:query_limit]
     report = {}
     for name, weight in configurations.items():
         expected = []

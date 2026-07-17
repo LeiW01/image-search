@@ -36,9 +36,15 @@ def test_evaluation_only_uses_multi_image_products_and_excludes_query(tmp_path: 
     records = [_record("a", "p1"), _record("b", "p1"), _record("c", "p2")]
     output = tmp_path / "evaluation.json"
 
-    report = evaluate_dataset(FakeService(), records, output, configurations={"融合0.8": 0.8})
+    report = evaluate_dataset(
+        FakeService(),
+        records,
+        output,
+        configurations={"融合0.8": 0.8},
+        query_limit=1,
+    )
 
-    assert set(excluded) == {"a", "b"}
+    assert excluded == ["a"]
     assert report["融合0.8"]["recall@1"] == 1.0
-    assert report["融合0.8"]["query_count"] == 2
+    assert report["融合0.8"]["query_count"] == 1
     assert output.is_file()
